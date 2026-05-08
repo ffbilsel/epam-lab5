@@ -1,0 +1,261 @@
+openapi: 3.0.3
+info:
+  title: User Authentication API
+  version: 1.0.0
+  description: |
+    HTTP contract for the User Authentication System (feature 001-user-auth).
+    All endpoints are served over HTTPS. Bodies are JSON. Errors use the
+    Problem Details format (RFC 7807). Generic, non-enumerating responses
+    are intentional for `/auth/register`, `/auth/login`, and
+    `/auth/reset/request` (see spec FR-005, FR-009, FR-013).
+
+servers:
+  - url: https://api.example.com
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 128
+      description: >
+        Plaintext password. MUST contain at least one letter and one digit.
+        Transmitted only over HTTPS; never logged.
+    Token:
+      type: string
+      minLength: 32
+      maxLength: 64
+      description: Opaque base64url one-time secret from a verification or reset email.
+    Session:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token:
+          type: string
+          description: Signed JWT (HS256). Place in `Authorization: Bearer`.
+        expiresAt:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+    GenericAck:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+
+  responses:
+    GenericAck:
+      description: Request accepted. Response is intentionally non-enumerating.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/GenericAck' }
+    BadRequest:
+      description: Validation failure
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing or invalid credentials / session
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Locked:
+      description: Account is temporarily locked due to repeated failed sign-ins
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Throttled
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new account (email/password)
+      description: >
+        Creates an unverified account and dispatches a verification email.
+        Always returns 202 — does not disclose whether the email was already
+        in use (FR-005).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { $ref: '#/components/schemas/Email' }
+                password: { $ref: '#/components/schemas/Password' }
+      responses:
+        '202': { $ref: '#/components/responses/GenericAck' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/verify:
+    post:
+      summary: Confirm an email-ownership verification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { $ref: '#/components/schemas/Token' }
+      responses:
+        '204': { description: Verification successful; account may now sign in. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '410':
+          description: Token expired or already used
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /auth/verify/resend:
+    post:
+      summary: Resend an email verification link
+      description: >
+        Always returns 202; new link invalidates any prior unused link
+        (FR-005c). Throttled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { $ref: '#/components/schemas/Email' }
+      responses:
+        '202': { $ref: '#/components/responses/GenericAck' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/login:
+    post:
+      summary: Sign in with email and password
+      description: >
+        On success returns a JWT session credential valid for 24 hours
+        (FR-006, FR-007). On failure returns a generic 401 that does not
+        disclose which field was wrong (FR-009). On lockout returns 423
+        (FR-010a).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { $ref: '#/components/schemas/Email' }
+                password: { $ref: '#/components/schemas/Password' }
+      responses:
+        '200':
+          description: Sign-in successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '423': { $ref: '#/components/responses/Locked' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      summary: Sign out the current session
+      description: Revokes the JWT's `jti` server-side immediately (FR-008).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Signed out. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/reset/request:
+    post:
+      summary: Request a password-reset email
+      description: >
+        Always returns 202 — does not disclose whether the email is
+        registered (FR-013). Throttled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { $ref: '#/components/schemas/Email' }
+      responses:
+        '202': { $ref: '#/components/responses/GenericAck' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/reset/confirm:
+    post:
+      summary: Complete a password reset using the emailed token
+      description: >
+        On success the password is updated, all live sessions for the account
+        are revoked (FR-015), lockout is cleared, and a security
+        notification email is dispatched (FR-016a).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:       { $ref: '#/components/schemas/Token' }
+                newPassword: { $ref: '#/components/schemas/Password' }
+      responses:
+        '204': { description: Password updated. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '410':
+          description: Reset token expired or already used (FR-014)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /me:
+    get:
+      summary: Return the authenticated account
+      description: >
+        Used by tests and clients to confirm a session credential is currently
+        valid. Returns 401 within 1 minute of session expiry (SC-003).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, email, emailVerifiedAt]
+                properties:
+                  id:              { type: string, format: uuid }
+                  email:           { $ref: '#/components/schemas/Email' }
+                  emailVerifiedAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
