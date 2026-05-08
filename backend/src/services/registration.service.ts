@@ -45,7 +45,7 @@ export interface RegistrationDeps {
  */
 export function buildRegistrationService(deps: RegistrationDeps = {}): RegistrationService {
   const clock = deps.clock ?? systemClock;
-  const mailer = deps.mailer ?? getMailer();
+  const resolveMailer = (): Mailer => deps.mailer ?? getMailer();
 
   return {
     register: async (input): Promise<void> => {
@@ -100,7 +100,7 @@ export function buildRegistrationService(deps: RegistrationDeps = {}): Registrat
       });
 
       if (issuedToken !== null && recipient !== null) {
-        await mailer.send({
+        await resolveMailer().send({
           to: recipient,
           subject: 'Verify your email',
           text: `Your verification token: ${issuedToken}\nIt expires in ${env.VERIFY_TOKEN_TTL_SECONDS} seconds.`,

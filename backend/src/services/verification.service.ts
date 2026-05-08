@@ -36,7 +36,7 @@ export interface VerificationDeps {
  */
 export function buildVerificationService(deps: VerificationDeps = {}): VerificationService {
   const clock = deps.clock ?? systemClock;
-  const mailer = deps.mailer ?? getMailer();
+  const resolveMailer = (): Mailer => deps.mailer ?? getMailer();
 
   return {
     verify: async (rawToken): Promise<void> => {
@@ -78,7 +78,7 @@ export function buildVerificationService(deps: VerificationDeps = {}): Verificat
       });
 
       if (issued !== null && to !== null) {
-        await mailer.send({
+        await resolveMailer().send({
           to,
           subject: 'Verify your email',
           text: `Your new verification token: ${issued}`,
