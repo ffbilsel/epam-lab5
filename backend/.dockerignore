@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+.git
+*.log
+tests
+.eslintrc.cjs
+.prettierrc
+.prettierignore
+jest.config.cjs
+README.md
