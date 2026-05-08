@@ -24,9 +24,7 @@ describe('POST /auth/reset/request', () => {
     await registerAndVerify('alice@example.com', 'abcd1234');
     mailer.sent.length = 0;
 
-    const res = await request(app)
-      .post('/auth/reset/request')
-      .send({ email: 'alice@example.com' });
+    const res = await request(app).post('/auth/reset/request').send({ email: 'alice@example.com' });
     expect(res.status).toBe(202);
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0]?.subject).toMatch(/reset/i);

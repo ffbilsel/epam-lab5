@@ -20,8 +20,8 @@ services:
     image: mailhog/mailhog
     container_name: auth-mail
     ports:
-      - '1025:1025'   # SMTP
-      - '8025:8025'   # Web UI
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
 
   app:
     build:
@@ -30,7 +30,7 @@ services:
     container_name: auth-app
     depends_on:
       postgres: { condition: service_healthy }
-      mailhog:  { condition: service_started }
+      mailhog: { condition: service_started }
     environment:
       PORT: '3000'
       DATABASE_URL: postgres://auth:auth@postgres:5432/auth
@@ -47,7 +47,7 @@ services:
       LOG_LEVEL: 'info'
       NODE_ENV: 'development'
     ports: ['3000:3000']
-    profiles: ['app']  # opt-in: docker compose --profile app up
+    profiles: ['app'] # opt-in: docker compose --profile app up
 
 volumes:
   pgdata:

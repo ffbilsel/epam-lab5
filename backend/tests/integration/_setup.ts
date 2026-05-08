@@ -4,7 +4,12 @@
  */
 import 'dotenv/config';
 import { buildApp } from '../../src/app.js';
-import { setMailer, createJsonMailer, type Mailer, type OutgoingEmail } from '../../src/infra/mailer.js';
+import {
+  setMailer,
+  createJsonMailer,
+  type Mailer,
+  type OutgoingEmail,
+} from '../../src/infra/mailer.js';
 import { pool } from '../../src/infra/db.js';
 
 export interface TestEnv {
